@@ -1,17 +1,41 @@
 class UserInterface {
-    constructor() {
-        this.title = "Connect 4";
-        this.nameInputs = [];
-        this.colorPickers = [];
+    constructor(container) {
+        this.container = container;
+        this.title = document.createElement("h2");
+        this.title.textContent = "Connect 4";
+        this.turnDiv = document.createElement("div");
+        this.container.append(this.title);
+        this.container.append(this.turnDiv);
+
+        this.playersInputs = [];
         this.defaultColors = ["#fefc00", "#ff0303", "#1be7ba", "#550081", "#fe890d", "#21bf00", "#e45caf", "#939596"];
-        this.rowSlider = this.addSlider("Row", 4, 18, 6);
-        this.columnSlider = this.addSlider("Column", 4, 21, 7);
-        this.playerSlider = this.addSlider("Player", 2, 8, 2);
-        this.playerSlider.onchange = this.manageNameInputs.bind(this);
-        this.playerSlider.onchange = this.manageColorPickers.bind(this);
+        this.rowSlider = this.addOptionSlider("Rows", 4, 18, 6);
+        this.columnSlider = this.addOptionSlider("Columns", 4, 21, 7);
+        this.streakSlider = this.addOptionSlider("Streak", 4, 12, 4);
+        this.playerSlider = this.addOptionSlider("Players", 2, 8, 2);
+        this.playerSlider.input.onchange = this.addPlayersInputs.bind(this);
+
+        this.displayOptionsSliders();
+        this.addPlayersInputs();
+        this.createStartButton();
+        this.createEndButton();
     }
 
-    addSlider(name, min, max, defaultValue) {
+    show() {
+        this.endButton.remove();
+        this.container.append(this.slidersOptionsDiv);
+        this.container.append(this.playersInputsDiv);
+        this.container.append(this.startButton);
+    }
+
+    hide() {
+        this.slidersOptionsDiv.remove();
+        this.playersInputsDiv.remove();
+        this.startButton.remove();
+        this.container.append(this.endButton);
+    }
+
+    addOptionSlider(name, min, max, defaultValue) {
         const slider = {
             label : document.createElement("label"),
             input : document.createElement("input")
@@ -23,60 +47,110 @@ class UserInterface {
         slider.input.type = "range";
         slider.input.min = min;
         slider.input.max = max;
+        slider.input.step = "1";
         slider.input.value = defaultValue;
+        slider.input.tooltip = "hello";
 
         return slider;
     }
 
-    playerInput() {
+    displayOptionsSliders() {
+        this.slidersOptionsDiv = document.createElement("div");
+        this.slidersOptionsDiv.style.display = "flex";
+        this.slidersOptionsDiv.style.flexDirection = "column";
+        this.container.append(this.slidersOptionsDiv);
 
-    }
+        const sliders = [this.rowSlider, this.columnSlider, this.playerSlider, this.streakSlider];
 
-    manageNameInputs() {
-        for (let i = 0; i < this.getPlayerCount(); i++) {
-            if (!this.nameInputs[i]) {
-                let input = document.createElement("input");
-                input.id = "player" + (i + 1).toString() + "-nameInput";
-                input.value = "Player " + (i + 1).toString();
-                this.nameInputs.push(input);
+        for (const element of sliders) {
+            const sliderOptionDiv = document.createElement("div");
+            this.slidersOptionsDiv.append(sliderOptionDiv);
+
+            for (let key in element) {
+                if ( key === "label" || key === "input") {
+                    sliderOptionDiv.append(element[key]);
+                }
             }
         }
     }
 
-    manageColorPickers() {
-        for (let i = 0; i < this.getPlayerCount(); i++) {
-            if (!this.colorPickers[i]) {
-                let picker = document.createElement("input");
-                picker.id = "player" + (i + 1).toString() + "-colorPicker";
-                picker.value = this.defaultColors[i];
-                this.colorPickers.push(picker);
+    addPlayersInputs() {
+        for (let i = 0; i < this.playerSlider.input.value; i++) {
+            if (!this.playersInputs[i]) {
+                const playerInputs = {
+                    nameInput: document.createElement("input"),
+                    colorInput: document.createElement("input")
+                }
+
+                playerInputs.nameInput.id = "player" + (i + 1).toString() + "-nameInput";
+                playerInputs.nameInput.value = "Player " + (i + 1).toString();
+
+                playerInputs.colorInput.id = "player" + (i + 1).toString() + "-colorPicker";
+                playerInputs.colorInput.type = "color";
+                playerInputs.colorInput.value = this.defaultColors[i];
+
+                this.playersInputs.push(playerInputs);
+            }
+        }
+
+        this.displayPlayersInputs();
+    }
+
+    displayPlayersInputs() {
+        this.playersInputsDiv = document.getElementById("playersInputsDiv");
+        if (!this.playersInputsDiv) {
+            this.playersInputsDiv = document.createElement("div");
+            this.playersInputsDiv.id = "playersInputsDiv";
+            this.container.append(this.playersInputsDiv);
+        }
+
+        const removables = this.playersInputsDiv.querySelectorAll("div");
+        for (const removable of removables) {
+            removable.remove();
+        }
+
+        for (let i = 0; i < this.playerSlider.input.value; i++) {
+            const playerInputsDiv = document.createElement("div");
+            this.playersInputsDiv.append(playerInputsDiv);
+
+            for (const key in this.playersInputs[i]) {
+                playerInputsDiv.append(this.playersInputs[i][key]);
             }
         }
     }
 
-    display(container) {
-        this.manageNameInputs();
-        this.manageColorPickers();
-        const sliders = [this.rowSlider, this.columnSlider, this.playerSlider, this.nameInputs, this.colorPickers];
-        const inputs = [this.nameInputs, this.colorPickers];
+    createStartButton() {
+        this.startButton = document.createElement("button");
+        this.startButton.style.borderRadius = "7.5px";
+        this.startButton.textContent = "Start game";
+        this.startButton.style.margin = "7.5px";
+        this.startButton.onclick = this.startGame.bind(this);
 
-        container.append(this.title);
+        this.container.appendChild(this.startButton);
+    }
 
-        for (let slider of sliders) {
-            for (let key in slider) {
-                console.log(key);
-                if (key === "label" || key === "input") container.append(slider[key]);
-            }
+    startGame() {
+        this.gameGrid = new GameGrid(this.rowSlider.input.value, this.columnSlider.input.value, this.streakSlider.input.value);
+        for (let i = 0; i < this.playerSlider.input.value; i++) {
+            this.gameGrid.addPlayers(this.playersInputs[i]);
         }
+        this.gameGrid.drawGrid(this.container);
+        this.hide();
     }
 
-    hide() {
-
+    createEndButton() {
+        this.endButton = document.createElement("button");
+        this.endButton.style.borderRadius = "7.5px";
+        this.endButton.textContent = "End game";
+        this.endButton.style.margin = "7.5px";
+        this.endButton.onclick = this.endGame.bind(this);
     }
 
-    getRowCount() { return this.rowSlider.input.value; }
-    getColumnCount() { return this.columnSlider.input.value; }
-    getPlayerCount() { return this.playerSlider.input.value; }
+    endGame() {
+        this.gameGrid.tableElement.remove();
+        this.gameGrid = null;
+        this.show();
+    }
 }
 
 class Player {
@@ -85,17 +159,10 @@ class Player {
         this.color = color;
         this.score = 0;
     }
-
-    getName() { return this.name; }
-    setName(name) { this.name = name; }
-    getColor() { return this.color; }
-    setColor(color) { this.color = color; }
-    getScore() { return this.score; }
-    setScore(int) { this.score = int; }
 }
 
 class GameGrid {
-    constructor(rows = 6, columns = 7, winRequirement = 4, backgroundColor = "#0069FFFF", startingPlayer = 0) {
+    constructor(rows = 6, columns = 7, winRequirement = 4, backgroundColor = "#0069ff", startingPlayer = 0) {
         this.players = [];
         this.tableCells = [];
         this.rowsAmount = rows;
@@ -106,10 +173,8 @@ class GameGrid {
         this.turn = 0;
     }
 
-    addPlayer(playerNames, playerColors) {
-        for (let i = 0; i < 2; i++) {
-            this.players.push(new Player(playerNames[i], playerColors[i]));
-        }
+    addPlayers(playerInputs) {
+        this.players.push(new Player(playerInputs.nameInput.value, playerInputs.colorInput.value));
     }
 
     drawGrid(container) {
@@ -118,6 +183,7 @@ class GameGrid {
         this.tableElement.style.border = "solid 4px black";
         this.tableElement.style.minWidth = "400px";
         this.tableElement.style.minHeight = "400px";
+        this.tableElement.style.marginInline = "auto";
         container.appendChild(this.tableElement);
 
         for (let row = 0; row < this.rowsAmount; row++) {
@@ -167,13 +233,13 @@ class GameGrid {
         let streak = 0;
 
         for (let i = 0; i < 8; i++) {
-            for (let offset = 1, x = start.x + incrementX[i], y = start.y + incrementY[i]; offset < 4 && ((x >= 0) && (x < this.columnsAmount) && (y >= 0) && (y < this.rowsAmount)); offset++, x += incrementX[i], y += incrementY[i]){
+            for (let offset = 1, x = start.x + incrementX[i], y = start.y + incrementY[i]; offset < this.winRequirement && ((x >= 0) && (x < this.columnsAmount) && (y >= 0) && (y < this.rowsAmount)); offset++, x += incrementX[i], y += incrementY[i]){
                 if (this.tableCells[y][x].id.split("_").pop() === this.players[this.playerTurn].name) streakCells.push(this.tableCells[y][x]);
             }
 
             if ((i + 1) % 2 === 0) {
                 if (streakCells.length >= this.winRequirement) {
-                    for (let cell of streakCells) {
+                    for (const cell of streakCells) {
                         cell.style.borderColor = "green";
                     }
                     streak++;
@@ -194,16 +260,9 @@ class GameGrid {
     }
 }
 
-const playerNames = ["Joueur 1", "Joueur 2", "Joueur 3", "Joueur 4"];
-const playerColors = ["#EACD6D", "#FF3939", "#39FFDB", "#39FF49"];
-
 window.onload = function() {
     const container = document.getElementById("container");
-    const userInterface = new UserInterface();
-    const gameGrid = new GameGrid(9, 9, 4);
-
-    userInterface.display(container);
-
-    //gameGrid.addPlayer(playerNames, playerColors);
-    //gameGrid.drawGrid(container);
+    container.style.border = "solid 2px black";
+    container.style.textAlign = "center";
+    new UserInterface(container);
 }
