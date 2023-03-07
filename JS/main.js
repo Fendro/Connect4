@@ -3,9 +3,7 @@ class UserInterface {
         this.container = container;
         this.title = document.createElement("h2");
         this.title.textContent = "Connect 4";
-        this.turnDiv = document.createElement("div");
         this.container.append(this.title);
-        this.container.append(this.turnDiv);
 
         this.playersInputs = [];
         this.defaultColors = ["#fefc00", "#ff0303", "#1be7ba", "#550081", "#fe890d", "#21bf00", "#e45caf", "#939596"];
@@ -130,10 +128,11 @@ class UserInterface {
     }
 
     startGame() {
-        this.gameGrid = new GameGrid(this.rowSlider.input.value, this.columnSlider.input.value, this.streakSlider.input.value);
+        this.players = [];
         for (let i = 0; i < this.playerSlider.input.value; i++) {
-            this.gameGrid.addPlayers(this.playersInputs[i]);
+            this.players.push(new Player(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value));
         }
+        this.gameGrid = new GameGrid(this.players, this.rowSlider.input.value, this.columnSlider.input.value, this.streakSlider.input.value);
         this.gameGrid.drawGrid(this.container);
         this.hide();
     }
@@ -147,6 +146,7 @@ class UserInterface {
     }
 
     endGame() {
+        this.gameGrid.turnDiv.remove();
         this.gameGrid.tableElement.remove();
         this.gameGrid = null;
         this.show();
@@ -161,29 +161,49 @@ class Player {
     }
 }
 
+class Bot extends Player {
+    nextMove(tableCells, rowsAmount, columnsAmount) {
+        this.checkPlayersStreaks(tableCells, rowsAmount, columnsAmount);
+    }
+
+    checkPlayersStreaks(tableCells, rowsAmount, columnsAmount) {
+        let row;
+        let aboutToWin = []
+
+        for (let row = 0; row < rowsAmount - 1; row++) {
+            for (let column = 0; column < columnsAmount - 1; column++) {
+                row = this.getLowestFreeRow(tableCells[row][column]);
+                for (let player = 0; player < players.length; player++) {
+                    if (this.checkPlayersStreaks(row, column, player)) aboutToWin += players[player];
+                }
+            }
+        }
+    }
+}
+
 class GameGrid {
-    constructor(rows = 6, columns = 7, winRequirement = 4, backgroundColor = "#0069ff", startingPlayer = 0) {
-        this.players = [];
+    constructor(players, rows = 6, columns = 7, winRequirement = 4, backgroundColor = "#0069ff") {
+        this.players = players;
         this.tableCells = [];
         this.rowsAmount = rows;
         this.columnsAmount = columns;
         this.winRequirement = winRequirement;
         this.backgroundColor = backgroundColor;
-        this.playerTurn = startingPlayer;
-        this.turn = 0;
-    }
-
-    addPlayers(playerInputs) {
-        this.players.push(new Player(playerInputs.nameInput.value, playerInputs.colorInput.value));
+        this.playerTurn = 0;
+        this.turnCount = 1;
     }
 
     drawGrid(container) {
+        this.turnDiv = document.createElement("div");
+        this.turnDiv.style.margin = "7.5px";
+        this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
         this.tableElement = document.createElement("table");
         this.tableElement.style.backgroundColor = this.backgroundColor;
         this.tableElement.style.border = "solid 4px black";
         this.tableElement.style.minWidth = "400px";
         this.tableElement.style.minHeight = "400px";
         this.tableElement.style.marginInline = "auto";
+        container.append(this.turnDiv);
         container.appendChild(this.tableElement);
 
         for (let row = 0; row < this.rowsAmount; row++) {
@@ -204,25 +224,35 @@ class GameGrid {
         }
     }
 
-    placeToken(column) {
-        this.turn++;
-        let rowNumber = 0;
+    getLowestFreeRow(column) {
+        let row = -1;
 
-        while (rowNumber < this.rowsAmount - 1 && this.tableCells[rowNumber + 1][column].id === "") {
-            rowNumber++;
+        while (row < this.rowsAmount - 1 && this.tableCells[row + 1][column].id === "") {
+            row++;
         }
 
-        const currentCell = this.tableCells[rowNumber][column];
+        return row;
+    }
 
-        if (currentCell.id === "") {
-            currentCell.setAttribute("id", this.turn.toString() + "_" + this.players[this.playerTurn].name);
-            currentCell.style.backgroundColor = this.players[this.playerTurn].color;
-            this.winCondition(this.streakCheck(rowNumber, column));
-            (this.playerTurn === this.players.length - 1) ? this.playerTurn = 0 : this.playerTurn++;
+    placeToken(column) {
+        let row = this.getLowestFreeRow(column);
+
+        if (row >= 0) {
+            const currentCell = this.tableCells[row][column];
+
+            if (currentCell.id === "") {
+                currentCell.setAttribute("id", this.turnCount.toString() + "_" + this.players[this.playerTurn].name);
+                currentCell.style.backgroundColor = this.players[this.playerTurn].color;
+                this.winCondition(this.streakCheck(row, column, this.players[this.playerTurn].name));
+                (this.playerTurn === this.players.length - 1) ? this.playerTurn = 0 : this.playerTurn++;
+            }
+
+            this.turnCount++;
+            this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
         }
     }
 
-    streakCheck(row, column) {
+    streakCheck(row, column, playerName) {
         const start = {
             x: column,
             y: row
@@ -234,7 +264,7 @@ class GameGrid {
 
         for (let i = 0; i < 8; i++) {
             for (let offset = 1, x = start.x + incrementX[i], y = start.y + incrementY[i]; offset < this.winRequirement && ((x >= 0) && (x < this.columnsAmount) && (y >= 0) && (y < this.rowsAmount)); offset++, x += incrementX[i], y += incrementY[i]){
-                if (this.tableCells[y][x].id.split("_").pop() === this.players[this.playerTurn].name) streakCells.push(this.tableCells[y][x]);
+                if (this.tableCells[y][x].id.split("_").pop() === playerName) streakCells.push(this.tableCells[y][x]);
             }
 
             if ((i + 1) % 2 === 0) {
