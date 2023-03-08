@@ -1,3 +1,5 @@
+export { init };
+
 class UserInterface {
     constructor(container) {
         this.container = container;
@@ -19,20 +21,6 @@ class UserInterface {
         this.createEndButton();
     }
 
-    show() {
-        this.endButton.remove();
-        this.container.append(this.slidersOptionsDiv);
-        this.container.append(this.playersInputsDiv);
-        this.container.append(this.startButton);
-    }
-
-    hide() {
-        this.slidersOptionsDiv.remove();
-        this.playersInputsDiv.remove();
-        this.startButton.remove();
-        this.container.append(this.endButton);
-    }
-
     addOptionSlider(name, min, max, defaultValue) {
         const slider = {
             label : document.createElement("label"),
@@ -47,7 +35,6 @@ class UserInterface {
         slider.input.max = max;
         slider.input.step = "1";
         slider.input.value = defaultValue;
-        slider.input.tooltip = "hello";
 
         return slider;
     }
@@ -81,14 +68,9 @@ class UserInterface {
                     botInput: document.createElement("input")
                 }
 
-                playerInputs.nameInput.id = "player" + (i + 1).toString() + "-nameInput";
                 playerInputs.nameInput.value = "Player " + (i + 1).toString();
-
-                playerInputs.colorInput.id = "player" + (i + 1).toString() + "-colorPicker";
                 playerInputs.colorInput.type = "color";
                 playerInputs.colorInput.value = this.defaultColors[i];
-
-                playerInputs.botInput.id = "player" + (i + 1).toString() + "-botCheckbox";
                 playerInputs.botInput.type = "checkbox";
 
                 this.playersInputs.push(playerInputs);
@@ -121,14 +103,11 @@ class UserInterface {
         }
     }
 
-    createStartButton() {
-        this.startButton = document.createElement("button");
-        this.startButton.style.borderRadius = "7.5px";
-        this.startButton.textContent = "Start game";
-        this.startButton.style.margin = "7.5px";
-        this.startButton.onclick = this.startGame.bind(this);
-
-        this.container.appendChild(this.startButton);
+    hide() {
+        this.slidersOptionsDiv.remove();
+        this.playersInputsDiv.remove();
+        this.startButton.remove();
+        this.container.append(this.endButton);
     }
 
     startGame() {
@@ -145,12 +124,21 @@ class UserInterface {
         this.hide();
     }
 
-    createEndButton() {
-        this.endButton = document.createElement("button");
-        this.endButton.style.borderRadius = "7.5px";
-        this.endButton.textContent = "End game";
-        this.endButton.style.margin = "7.5px";
-        this.endButton.onclick = this.endGame.bind(this);
+    createStartButton() {
+        this.startButton = document.createElement("button");
+        this.startButton.style.borderRadius = "7.5px";
+        this.startButton.textContent = "Start game";
+        this.startButton.style.margin = "7.5px";
+        this.startButton.onclick = this.startGame.bind(this);
+
+        this.container.appendChild(this.startButton);
+    }
+
+    show() {
+        this.endButton.remove();
+        this.container.append(this.slidersOptionsDiv);
+        this.container.append(this.playersInputsDiv);
+        this.container.append(this.startButton);
     }
 
     endGame() {
@@ -158,6 +146,14 @@ class UserInterface {
         this.gameGrid.tableElement.remove();
         this.gameGrid = null;
         this.show();
+    }
+
+    createEndButton() {
+        this.endButton = document.createElement("button");
+        this.endButton.style.borderRadius = "7.5px";
+        this.endButton.textContent = "End game";
+        this.endButton.style.margin = "7.5px";
+        this.endButton.onclick = this.endGame.bind(this);
     }
 }
 
@@ -171,6 +167,51 @@ class Player {
 }
 
 class Bot extends Player {
+    nextMove(gameGrid, lowestFreeRows, playersStreaks) {
+        for (const playerStreak of playersStreaks) {
+            if (playerStreak.player === this && playerStreak.winningColumn !== null) {
+                console.log(playerStreak.player.name + " can win.");
+                return playerStreak.winningColumn;
+            }
+            if (playerStreak.player !== this && playerStreak.winningColumn !== null) {
+                console.log(this.name + " will prevent " + playerStreak.player.name + " from finishing a streak.");
+                return playerStreak.winningColumn;
+            }
+        }
+
+        let nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+
+        while (lowestFreeRows[nextMove] === null) {
+            nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+        }
+
+        return nextMove;
+    }
+
+    checkPlayersStreaks(gameGrid, lowestFreeRows) {
+        let playersStreaks = [];
+        let streakLines, playerInfos;
+
+        for (let column = 0; column < gameGrid.columnsAmount; column++) {
+            if (lowestFreeRows[column] !== null) {
+                for (let player = 0; player < gameGrid.players.length; player++) {
+                    streakLines = gameGrid.streakCheck(lowestFreeRows[column], column, gameGrid.players[player].name);
+
+                    if (streakLines.length > 0) {
+                        playerInfos = {
+                            player: gameGrid.players[player],
+                            winningColumn: column
+                        }
+
+                        playersStreaks.push(playerInfos);
+                    }
+                }
+            }
+        }
+
+        return playersStreaks;
+    }
+
     play(gameGrid) {
         let lowestFreeRows = [];
         let lowestFreeRow = null;
@@ -184,41 +225,6 @@ class Bot extends Player {
         const nextMove = this.nextMove(gameGrid, lowestFreeRows, playersStreaks);
 
         gameGrid.placeToken(nextMove);
-    }
-
-    checkPlayersStreaks(gameGrid, lowestFreeRows) {
-        let playerStreaks = [];
-
-        for (let column = 0; column < gameGrid.columnsAmount; column++) {
-            console.log(lowestFreeRows);
-            if (lowestFreeRows[column]) {
-                for (let player = 0; player < gameGrid.players.length; player++) {
-                    let playerInfos = {
-                        player: gameGrid.players[player],
-                        winningColumn: null
-                    }
-
-                    if (gameGrid.streakCheck(lowestFreeRows[column], column, gameGrid.players[player].name)) playerInfos.winningColumn = column;
-                }
-            }
-        }
-
-        return playerStreaks;
-    }
-
-    nextMove(gameGrid, lowestFreeRows, playersStreaks) {
-        for (const playerStreak of playersStreaks) {
-            if (playerStreak.player === this && playerStreak.winningColumn !== null) return playerStreak.winningColumn;
-            //if (playerStreak.player !== this && playerStreak.winningColumn !== null && nextMove === null) return playerStreak.winningColumn;
-        }
-
-        let nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
-
-        while (lowestFreeRows[nextMove] === null) {
-            nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
-        }
-
-        return nextMove;
     }
 }
 
@@ -263,6 +269,8 @@ class GameGrid {
                 rowElement.appendChild(columnElement);
             }
         }
+
+        if (this.players[this.playerTurn].bot) this.players[this.playerTurn].play(this);
     }
 
     getLowestFreeRow(column) {
@@ -290,13 +298,17 @@ class GameGrid {
 
             this.turnCount++;
             this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
-            if (this.players[this.playerTurn].bot) {
+            if (this.players[this.playerTurn].bot && (this.turnCount <= this.columnsAmount * this.rowsAmount)) {
                 const gameGrid = this;
                 setTimeout(function() {
                     gameGrid.players[gameGrid.playerTurn].play(gameGrid);
-                }, 1000);
+                }, 100);
             }
         }
+    }
+
+    boundariesCheck(column, row) {
+        return ((column >= 0 && column < this.columnsAmount) && (row >= 0 && row < this.rowsAmount));
     }
 
     streakCheck(row, column, playerName) {
@@ -304,14 +316,28 @@ class GameGrid {
             x: column,
             y: row
         }
-        const incrementX = [-1, 1, 0, 0, -1, 1, -1, 1];
-        const incrementY = [0, 0, -1, 1, -1, 1, 1, -1];
+        const direction = {
+            x: [-1, 1, 0, 0, -1, 1, -1, 1],
+            y: [0, 0, -1, 1, -1, 1, 1, -1]
+        }
         let streakCells = [this.tableCells[row][column]];
         let streakLines = [];
+        let offset, columnOffset, rowOffset;
 
         for (let i = 0; i < 8; i++) {
-            for (let offset = 1, x = start.x + incrementX[i], y = start.y + incrementY[i]; offset < this.winRequirement && ((x >= 0) && (x < this.columnsAmount) && (y >= 0) && (y < this.rowsAmount)); offset++, x += incrementX[i], y += incrementY[i]){
-                if (this.tableCells[y][x].id.split("_").pop() === playerName) streakCells.push(this.tableCells[y][x]);
+            offset = 1;
+            columnOffset = start.x + direction.x[i];
+            rowOffset = start.y + direction.y[i];
+
+            while (offset < this.winRequirement && this.boundariesCheck(columnOffset, rowOffset)) {
+                if (this.tableCells[rowOffset][columnOffset].id.split("_").pop() === playerName) {
+                    streakCells.push(this.tableCells[rowOffset][columnOffset]);
+                    offset++;
+                    columnOffset += direction.x[i];
+                    rowOffset += direction.y[i];
+                } else {
+                    offset = this.winRequirement;
+                }
             }
 
             if ((i + 1) % 2 === 0) {
@@ -336,15 +362,17 @@ class GameGrid {
                 }
             }
 
-            alert(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
+            console.log(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
             this.players[this.playerTurn].score += streaks;
         }
     }
 }
 
-window.onload = function() {
-    const container = document.getElementById("container");
-    container.style.border = "solid 2px black";
-    container.style.textAlign = "center";
-    new UserInterface(container);
+function init() {
+    window.onload = function() {
+        const container = document.getElementById("container");
+        container.style.border = "solid 2px black";
+        container.style.textAlign = "center";
+        new UserInterface(container);
+    }
 }
