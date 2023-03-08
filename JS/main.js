@@ -77,7 +77,8 @@ class UserInterface {
             if (!this.playersInputs[i]) {
                 const playerInputs = {
                     nameInput: document.createElement("input"),
-                    colorInput: document.createElement("input")
+                    colorInput: document.createElement("input"),
+                    botInput: document.createElement("input")
                 }
 
                 playerInputs.nameInput.id = "player" + (i + 1).toString() + "-nameInput";
@@ -86,6 +87,9 @@ class UserInterface {
                 playerInputs.colorInput.id = "player" + (i + 1).toString() + "-colorPicker";
                 playerInputs.colorInput.type = "color";
                 playerInputs.colorInput.value = this.defaultColors[i];
+
+                playerInputs.botInput.id = "player" + (i + 1).toString() + "-botCheckbox";
+                playerInputs.botInput.type = "checkbox";
 
                 this.playersInputs.push(playerInputs);
             }
@@ -130,7 +134,11 @@ class UserInterface {
     startGame() {
         this.players = [];
         for (let i = 0; i < this.playerSlider.input.value; i++) {
-            this.players.push(new Player(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value));
+            if (!this.playersInputs[i].botInput.checked) {
+                this.players.push(new Player(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked));
+            } else {
+                this.players.push(new Bot(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked));
+            }
         }
         this.gameGrid = new GameGrid(this.players, this.rowSlider.input.value, this.columnSlider.input.value, this.streakSlider.input.value);
         this.gameGrid.drawGrid(this.container);
@@ -154,30 +162,63 @@ class UserInterface {
 }
 
 class Player {
-    constructor(name, color) {
+    constructor(name, color, bot) {
         this.name = name;
         this.color = color;
+        this.bot = bot;
         this.score = 0;
     }
 }
 
 class Bot extends Player {
-    nextMove(tableCells, rowsAmount, columnsAmount) {
-        this.checkPlayersStreaks(tableCells, rowsAmount, columnsAmount);
+    play(gameGrid) {
+        let lowestFreeRows = [];
+        let lowestFreeRow = null;
+
+        for (let column = 0; column < gameGrid.columnsAmount; column++) {
+            lowestFreeRow = gameGrid.getLowestFreeRow(column);
+            (lowestFreeRow >= 0) ? lowestFreeRows.push(lowestFreeRow) : lowestFreeRows.push(null);
+        }
+
+        const playersStreaks = this.checkPlayersStreaks(gameGrid, lowestFreeRows);
+        const nextMove = this.nextMove(gameGrid, lowestFreeRows, playersStreaks);
+
+        gameGrid.placeToken(nextMove);
     }
 
-    checkPlayersStreaks(tableCells, rowsAmount, columnsAmount) {
-        let row;
-        let aboutToWin = []
+    checkPlayersStreaks(gameGrid, lowestFreeRows) {
+        let playerStreaks = [];
 
-        for (let row = 0; row < rowsAmount - 1; row++) {
-            for (let column = 0; column < columnsAmount - 1; column++) {
-                row = this.getLowestFreeRow(tableCells[row][column]);
-                for (let player = 0; player < players.length; player++) {
-                    if (this.checkPlayersStreaks(row, column, player)) aboutToWin += players[player];
+        for (let column = 0; column < gameGrid.columnsAmount; column++) {
+            console.log(lowestFreeRows);
+            if (lowestFreeRows[column]) {
+                for (let player = 0; player < gameGrid.players.length; player++) {
+                    let playerInfos = {
+                        player: gameGrid.players[player],
+                        winningColumn: null
+                    }
+
+                    if (gameGrid.streakCheck(lowestFreeRows[column], column, gameGrid.players[player].name)) playerInfos.winningColumn = column;
                 }
             }
         }
+
+        return playerStreaks;
+    }
+
+    nextMove(gameGrid, lowestFreeRows, playersStreaks) {
+        for (const playerStreak of playersStreaks) {
+            if (playerStreak.player === this && playerStreak.winningColumn !== null) return playerStreak.winningColumn;
+            //if (playerStreak.player !== this && playerStreak.winningColumn !== null && nextMove === null) return playerStreak.winningColumn;
+        }
+
+        let nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+
+        while (lowestFreeRows[nextMove] === null) {
+            nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+        }
+
+        return nextMove;
     }
 }
 
@@ -249,6 +290,12 @@ class GameGrid {
 
             this.turnCount++;
             this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
+            if (this.players[this.playerTurn].bot) {
+                const gameGrid = this;
+                setTimeout(function() {
+                    gameGrid.players[gameGrid.playerTurn].play(gameGrid);
+                }, 1000);
+            }
         }
     }
 
@@ -260,7 +307,7 @@ class GameGrid {
         const incrementX = [-1, 1, 0, 0, -1, 1, -1, 1];
         const incrementY = [0, 0, -1, 1, -1, 1, 1, -1];
         let streakCells = [this.tableCells[row][column]];
-        let streak = 0;
+        let streakLines = [];
 
         for (let i = 0; i < 8; i++) {
             for (let offset = 1, x = start.x + incrementX[i], y = start.y + incrementY[i]; offset < this.winRequirement && ((x >= 0) && (x < this.columnsAmount) && (y >= 0) && (y < this.rowsAmount)); offset++, x += incrementX[i], y += incrementY[i]){
@@ -269,23 +316,28 @@ class GameGrid {
 
             if ((i + 1) % 2 === 0) {
                 if (streakCells.length >= this.winRequirement) {
-                    for (const cell of streakCells) {
-                        cell.style.borderColor = "green";
-                    }
-                    streak++;
+                    streakLines.push(streakCells);
                 }
 
                 streakCells = [this.tableCells[row][column]];
             }
         }
 
-        return streak;
+        return streakLines;
     }
 
-    winCondition(streak) {
-        if (streak > 0) {
-            alert(this.players[this.playerTurn].name + " won and earned " + streak + ((streak === 1) ? " point!" : " points!"));
-            this.players[this.playerTurn].score += streak;
+    winCondition(streakLines) {
+        const streaks = streakLines.length;
+
+        if (streaks > 0) {
+            for (const streakCells of streakLines) {
+                for (const cell of streakCells) {
+                    cell.style.borderColor = "green";
+                }
+            }
+
+            alert(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
+            this.players[this.playerTurn].score += streaks;
         }
     }
 }
