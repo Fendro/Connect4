@@ -167,7 +167,19 @@ class Player {
 }
 
 class Bot extends Player {
-    nextMove(gameGrid, lowestFreeRows, playersStreaks) {
+    isMistake(enabledStreaks, column) {
+        for (const enabledStreak of enabledStreaks) {
+            if (enabledStreak.player !== this && enabledStreak.winningColumn === column) {
+                console.log(this.name + " randomized a move that would enable " + enabledStreak.player.name + " to form a streak, randomizing again.");
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    nextMove(gameGrid, lowestFreeRows, playersStreaks, enabledStreaks) {
         for (const playerStreak of playersStreaks) {
             if (playerStreak.player === this && playerStreak.winningColumn !== null) {
                 console.log(playerStreak.player.name + " can win.");
@@ -179,10 +191,20 @@ class Bot extends Player {
             }
         }
 
+        for (const enabledStreak of enabledStreaks) {
+            if (enabledStreak.player === this && enabledStreak.winningColumn !== null && !this.isMistake(enabledStreaks, enabledStreak.winningColumn)) {
+                console.log(enabledStreak.player.name + " will enable a streak for himself.");
+                return enabledStreak.winningColumn;
+            }
+        }
+
         let nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
 
         while (lowestFreeRows[nextMove] === null) {
             nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+            while (this.isMistake(enabledStreaks, nextMove)) {
+                nextMove = Math.floor(Math.random() * (gameGrid.columnsAmount));
+            }
         }
 
         return nextMove;
@@ -214,15 +236,27 @@ class Bot extends Player {
 
     play(gameGrid) {
         let lowestFreeRows = [];
+        let secondLowestFreeRows = [];
         let lowestFreeRow = null;
 
         for (let column = 0; column < gameGrid.columnsAmount; column++) {
             lowestFreeRow = gameGrid.getLowestFreeRow(column);
             (lowestFreeRow >= 0) ? lowestFreeRows.push(lowestFreeRow) : lowestFreeRows.push(null);
+            (lowestFreeRow >= 1) ? secondLowestFreeRows.push(lowestFreeRow - 1) : secondLowestFreeRows.push(null);
         }
 
         const playersStreaks = this.checkPlayersStreaks(gameGrid, lowestFreeRows);
-        const nextMove = this.nextMove(gameGrid, lowestFreeRows, playersStreaks);
+        const enabledStreaks = this.checkPlayersStreaks(gameGrid, secondLowestFreeRows);
+        console.log(this.name + " is playing.");
+        /*if (playersStreaks.length > 0) {
+            console.log("playerStreaks");
+            console.log(playersStreaks);
+        }
+        if (enabledStreaks.length > 0) {
+            console.log("enabledStreaks");
+            console.log(enabledStreaks);
+        }*/
+        const nextMove = this.nextMove(gameGrid, lowestFreeRows, playersStreaks, enabledStreaks);
 
         gameGrid.placeToken(nextMove);
     }
@@ -232,6 +266,7 @@ class GameGrid {
     constructor(players, rows = 6, columns = 7, winRequirement = 4, backgroundColor = "#0069ff") {
         this.players = players;
         this.tableCells = [];
+        this.movesHistory = [];
         this.rowsAmount = rows;
         this.columnsAmount = columns;
         this.winRequirement = winRequirement;
@@ -247,8 +282,8 @@ class GameGrid {
         this.tableElement = document.createElement("table");
         this.tableElement.style.backgroundColor = this.backgroundColor;
         this.tableElement.style.border = "solid 4px black";
-        this.tableElement.style.minWidth = "400px";
-        this.tableElement.style.minHeight = "400px";
+        this.tableElement.style.minWidth = "600px";
+        this.tableElement.style.minHeight = "600px";
         this.tableElement.style.marginInline = "auto";
         container.append(this.turnDiv);
         container.appendChild(this.tableElement);
@@ -297,6 +332,7 @@ class GameGrid {
             }
 
             this.turnCount++;
+            this.movesHistory.push(currentCell);
             this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
             if (this.players[this.playerTurn].bot && (this.turnCount <= this.columnsAmount * this.rowsAmount)) {
                 const gameGrid = this;
@@ -307,8 +343,8 @@ class GameGrid {
         }
     }
 
-    boundariesCheck(column, row) {
-        return ((column >= 0 && column < this.columnsAmount) && (row >= 0 && row < this.rowsAmount));
+    boundariesCheck(row, column) {
+        return ((row >= 0 && row < this.rowsAmount) && (column >= 0 && column < this.columnsAmount) );
     }
 
     streakCheck(row, column, playerName) {
@@ -329,7 +365,7 @@ class GameGrid {
             columnOffset = start.x + direction.x[i];
             rowOffset = start.y + direction.y[i];
 
-            while (offset < this.winRequirement && this.boundariesCheck(columnOffset, rowOffset)) {
+            while (offset < this.winRequirement && this.boundariesCheck(rowOffset, columnOffset)) {
                 if (this.tableCells[rowOffset][columnOffset].id.split("_").pop() === playerName) {
                     streakCells.push(this.tableCells[rowOffset][columnOffset]);
                     offset++;
