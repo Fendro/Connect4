@@ -93,6 +93,18 @@ class UserInterface {
                 playerInputs.nameInput.value = "Player " + (i + 1).toString();
                 playerInputs.colorInput.type = "color";
                 playerInputs.colorInput.value = this.defaultPlayersColor[i];
+                playerInputs.colorInput.onclick = function() {
+                    this.tempValue = this.value;
+                }
+                playerInputs.colorInput.onchange = function() {
+                    const inputs = document.querySelectorAll("input");
+                    for (const input of inputs) {
+                        if (input !== this && input.value === this.value) {
+                            alert("This color is already taken, please select another one.");
+                            this.value = this.tempValue;
+                        }
+                    }
+                }
                 playerInputs.botInput.type = "checkbox";
 
                 this.playersInputs.push(playerInputs);
