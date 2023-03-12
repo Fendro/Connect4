@@ -3,6 +3,8 @@ export { init };
 class UserInterface {
     constructor(container) {
         this.container = container;
+        this.container.style.maxWidth = "300px";
+        this.container.style.marginInline = "auto";
         this.title = document.createElement("h2");
         this.title.textContent = "Connect 4";
         this.container.append(this.title);
@@ -28,12 +30,13 @@ class UserInterface {
             input: document.createElement("input")
         }
 
-        gameBackgroundColorInput.label.textContent = "Background color";
+        gameBackgroundColorInput.label.textContent = "Background";
         gameBackgroundColorInput.label.for = "gameBackgroundColor-picker";
 
         gameBackgroundColorInput.input.id = "gameBackgroundColor-picker";
         gameBackgroundColorInput.input.type = "color";
         gameBackgroundColorInput.input.value = "#0069ff";
+        gameBackgroundColorInput.input.style.marginRight = "24px";
 
         return gameBackgroundColorInput;
     }
@@ -66,6 +69,8 @@ class UserInterface {
 
         for (const element of options) {
             const gameOptionsDiv = document.createElement("div");
+            gameOptionsDiv.style.display = "flex";
+            gameOptionsDiv.style.justifyContent = "space-between";
             this.slidersOptionsDiv.append(gameOptionsDiv);
 
             for (let key in element) {
@@ -159,7 +164,9 @@ class UserInterface {
     endGame() {
         this.gameGrid.turnDiv.remove();
         this.gameGrid.tableElement.remove();
+        this.gameGrid.cancelLastPlayButton.remove();
         this.gameGrid = null;
+        this.container.style.maxWidth = "300px";
         this.show();
     }
 
@@ -182,53 +189,76 @@ class Player {
 }
 
 class Bot extends Player {
-    nextMove(gameGrid) {
-        let availableColumns = [];
-        let streakLines = null;
+    checkPlayableCells(gameGrid, playableCells) {
+        for (const cell of playableCells) {
+            let i = 0;
+            let playerNumber = gameGrid.playerTurn;
 
-        for (let column = 0; column < gameGrid.columnsAmount; column++) {
-            let row = gameGrid.getLowestFreeRow(column);
-
-            if (row >= 0) {
-                availableColumns.push(column);
-
-                streakLines = gameGrid.streakCheck(row, column, this.name);
+            do {
+                let streakLines = gameGrid.streakCheck(cell.row, cell.column, gameGrid.players[playerNumber].name);
                 if (streakLines.length > 0) {
-                    console.log(this.name + " identified a streak and will complete it.");
-                    return column;
+                    if (gameGrid.players[playerNumber] === this) {
+                        console.log(this.name + " identified a streak and will complete it.");
+                    } else {
+                        console.log(this.name + " will prevent " + gameGrid.players[playerNumber].name + " from completing a streak.");
+                    }
+
+                    return cell.column;
                 }
 
-                for (let player of gameGrid.players) {
-                    if (player !== this) {
-                        streakLines = gameGrid.streakCheck(row, column, player.name);
+                playerNumber = gameGrid.getNextPlayerTurn(playerNumber);
+                i++;
+            } while (i < gameGrid.players.length);
+        }
+
+        return false;
+    }
+
+    checkAhead(gameGrid, playableCells) {
+        for (const cell of playableCells) {
+            if (cell.row >= 1) {
+                for (const player of gameGrid.players) {
+                    if (player !== this && !cell.isBad) {
+                        const streakLines = gameGrid.streakCheck((cell.row - 1), cell.column, player.name);
+
                         if (streakLines.length > 0) {
-                            console.log(this.name + " will prevent + " + player.name + " from completing a streak.");
-                            return column;
+                            console.log(this.name + " identified a move which would benefit an opponent and will remove it from its moves set");
+                            cell.isBad = true;
                         }
-                    }
-                }
-            }
-
-            if (row >= 1) {
-                for (let player of gameGrid.players) {
-                    for (let player of gameGrid.players) {
-                        if (player !== this) {
-                            if (gameGrid.streakCheck(row - 1, column, player.name).length > 0) {
-                                console.log(this.name + " identified a move that would enable its opponent(s) to score and removed it from its moves set.");
-                                return column;
-                            }
-                        }
-                    }
-
-                    if (gameGrid.streakCheck(row - 1, column, this.name).length > 0) {
-                        console.log(this.name + " will enable itself a streak for its next turn.");
-                        return column;
                     }
                 }
             }
         }
+    }
 
-        return availableColumns[Math.floor(Math.random() * (availableColumns.length - 1))];
+    randomizeColumn(playableCells) {
+        let half = Math.floor(playableCells.length / 2);
+        let direction = (Math.random() >= 0.5) ? 1 : -1;
+
+        for (let i = 0; i < 2; i++) {
+            for (let offset = half; offset >= 0 && offset < playableCells.length; offset += direction) {
+                if (!playableCells[offset].column.isBad && Math.random() >= 0.9) return playableCells[offset].column;
+            }
+            direction *= -1;
+        }
+
+        return false;
+    }
+
+    nextMove(gameGrid) {
+        const playableCells = gameGrid.getPlayableCells();
+
+        const immediateWinCell = this.checkPlayableCells(gameGrid, playableCells);
+        if (immediateWinCell) return immediateWinCell;
+
+        this.checkAhead(gameGrid, playableCells);
+
+        const preferredCell = this.randomizeColumn(playableCells);
+        if (preferredCell) return preferredCell;
+
+        console.log("Defaulting to purely random cell.");
+
+        return playableCells[Math.floor(Math.random() * (playableCells.length))].column;
     }
 
     play(gameGrid) {
@@ -251,9 +281,11 @@ class GameGrid {
         this.backgroundColor = backgroundColor;
         this.playerTurn = 0;
         this.turnCount = 1;
+        this.gameOver = false;
     }
 
     drawGrid(container) {
+        container.style.maxWidth = "600px";
         this.turnDiv = document.createElement("div");
         this.turnDiv.style.margin = "7.5px";
         this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
@@ -283,11 +315,16 @@ class GameGrid {
             }
         }
 
+        this.cancelLastPlayButton = document.createElement("button");
+        this.cancelLastPlayButton.textContent = "Cancel play";
+        this.cancelLastPlayButton.onclick = this.cancelLastPlay.bind(this);
+        container.append(this.cancelLastPlayButton);
+
         if (this.players[this.playerTurn].bot) this.players[this.playerTurn].play(this);
     }
 
-    getNextPlayer() {
-        return (this.playerTurn === this.players.length - 1) ? 0 : this.playerTurn + 1;
+    getNextPlayerTurn(playerTurn) {
+        return (playerTurn < this.players.length - 1) ? (playerTurn + 1) : 0;
     }
 
     getLowestFreeRow(column) {
@@ -305,17 +342,17 @@ class GameGrid {
 
         if (row >= 0) {
             const currentCell = this.tableCells[row][column];
+            currentCell.setAttribute("id", this.turnCount.toString() + "_" + this.players[this.playerTurn].name);
+            currentCell.style.backgroundColor = this.players[this.playerTurn].color;
 
-            if (currentCell.id === "") {
-                currentCell.setAttribute("id", this.turnCount.toString() + "_" + this.players[this.playerTurn].name);
-                currentCell.style.backgroundColor = this.players[this.playerTurn].color;
-                this.winCondition(this.streakCheck(row, column, this.players[this.playerTurn].name));
-                this.playerTurn = this.getNextPlayer();
-            }
-
-            this.turnCount++;
+            this.winCondition(this.streakCheck(row, column, this.players[this.playerTurn].name));
+            if (this.gameOver) return null;
             this.movesHistory.push(currentCell);
+            this.playerTurn = this.getNextPlayerTurn(this.playerTurn);
+            this.turnCount++;
             this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
+            this.cancelLastPlayButton.hidden = false;
+
             if (this.players[this.playerTurn].bot && (this.turnCount <= this.columnsAmount * this.rowsAmount)) {
                 const gameGrid = this;
                 setTimeout(function() {
@@ -326,6 +363,7 @@ class GameGrid {
     }
 
     cancelLastPlay() {
+        this.cancelLastPlayButton.hidden = true;
         (this.playerTurn === 0) ? this.playerTurn = (this.players.length - 1) : this.playerTurn--;
         this.turnCount--;
         this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
@@ -380,6 +418,25 @@ class GameGrid {
         return streakLines;
     }
 
+    getPlayableCells() {
+        let playableCells = [];
+
+        for (let column = 0; column < this.columnsAmount; column++) {
+            const row = this.getLowestFreeRow(column);
+
+            if (row >= 0) {
+                const cell = {
+                    row: row,
+                    column: column
+                }
+
+                playableCells.push(cell);
+            }
+        }
+
+        return playableCells;
+    }
+
     winCondition(streakLines) {
         const streaks = streakLines.length;
 
@@ -390,8 +447,10 @@ class GameGrid {
                 }
             }
 
-            console.log(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
+            alert(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
             this.players[this.playerTurn].score += streaks;
+            this.cancelLastPlayButton.hidden = true;
+            this.gameOver = "true";
         }
     }
 }
