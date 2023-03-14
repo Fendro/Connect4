@@ -9,6 +9,7 @@ class UserInterface {
         this.title.textContent = "Connect 4";
         this.container.append(this.title);
 
+        this.players = [];
         this.playersInputs = [];
         this.defaultPlayersColor = ["#fefc00", "#ff0303", "#1be7ba", "#550081", "#fe890d", "#21bf00", "#e45caf", "#939596"];
         this.gameBackgroundColor = this.addBackgroundColorPicker();
@@ -142,13 +143,20 @@ class UserInterface {
         this.container.append(this.endButton);
     }
 
+    playerChanged(playerIndex, playerInfos) {
+        if (this.players[playerIndex].name !== playerInfos.nameInput.value) return true;
+        if (this.players[playerIndex].color !== playerInfos.colorInput.value) return true;
+        if (this.players[playerIndex].bot !== playerInfos.botInput.checked) return true;
+    }
+
     startGame() {
-        this.players = [];
         for (let i = 0; i < this.playerSlider.input.value; i++) {
-            if (!this.playersInputs[i].botInput.checked) {
-                this.players.push(new Player(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked));
-            } else {
-                this.players.push(new Bot(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked));
+            if (!this.players[i] || this.playerChanged(i, this.playersInputs[i])) {
+                if (!this.playersInputs[i].botInput.checked) {
+                    this.players[i] = new Player(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked);
+                } else {
+                    this.players[i] = new Bot(this.playersInputs[i].nameInput.value, this.playersInputs[i].colorInput.value, this.playersInputs[i].botInput.checked);
+                }
             }
         }
         this.gameGrid = new GameGrid(this.players, this.rowSlider.input.value, this.columnSlider.input.value, this.streakSlider.input.value, this.gameBackgroundColor.input.value);
@@ -350,26 +358,28 @@ class GameGrid {
     }
 
     placeToken(column) {
-        let row = this.getLowestFreeRow(column);
+        if (!this.gameOver) {
+            let row = this.getLowestFreeRow(column);
 
-        if (row >= 0) {
-            const currentCell = this.tableCells[row][column];
-            currentCell.setAttribute("id", this.turnCount.toString() + "_" + this.players[this.playerTurn].name);
-            currentCell.style.backgroundColor = this.players[this.playerTurn].color;
+            if (row >= 0) {
+                const currentCell = this.tableCells[row][column];
+                currentCell.setAttribute("id", this.turnCount.toString() + "_" + this.players[this.playerTurn].name);
+                currentCell.style.backgroundColor = this.players[this.playerTurn].color;
 
-            this.winCondition(this.streakCheck(row, column, this.players[this.playerTurn].name));
-            if (this.gameOver) return null;
-            this.movesHistory.push(currentCell);
-            this.playerTurn = this.getNextPlayerTurn(this.playerTurn);
-            this.turnCount++;
-            this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
-            this.cancelLastPlayButton.hidden = false;
+                this.winCondition(this.streakCheck(row, column, this.players[this.playerTurn].name));
+                if (this.gameOver) return null;
+                this.movesHistory.push(currentCell);
+                this.playerTurn = this.getNextPlayerTurn(this.playerTurn);
+                this.turnCount++;
+                this.turnDiv.innerHTML = "Turn " + this.turnCount + " - <span style=\"color:" + this.players[this.playerTurn].color + "\">" + this.players[this.playerTurn].name + "</span>";
+                this.cancelLastPlayButton.hidden = false;
 
-            if (this.players[this.playerTurn].bot && (this.turnCount <= this.columnsAmount * this.rowsAmount)) {
-                const gameGrid = this;
-                setTimeout(function() {
-                    gameGrid.players[gameGrid.playerTurn].play(gameGrid);
-                }, 100);
+                if (this.players[this.playerTurn].bot && (this.turnCount <= this.columnsAmount * this.rowsAmount)) {
+                    const gameGrid = this;
+                    setTimeout(function() {
+                        gameGrid.players[gameGrid.playerTurn].play(gameGrid);
+                    }, 100);
+                }
             }
         }
     }
@@ -459,10 +469,16 @@ class GameGrid {
                 }
             }
 
-            alert(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!"));
             this.players[this.playerTurn].score += streaks;
+
+            let scores = "";
+            for (const player of this.players) {
+                scores += player.name + " : " + player.score + " points.\n"
+            }
+
+            alert(this.players[this.playerTurn].name + " won and earned " + streaks + ((streaks === 1) ? " point!" : " points!") + "\n\n" + scores);
             this.cancelLastPlayButton.hidden = true;
-            this.gameOver = "true";
+            this.gameOver = true;
         }
     }
 }
